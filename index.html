@@ -1,1 +1,71 @@
 meu boletim
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Garante que o site funcione bem em celular -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Boletim Digital</title>
+  <!-- Liga o arquivo de estilo -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- CABEÇALHO -->
+  <header class="cabecalho">
+    <h1>Boletim Digital</h1>
+    <p class="subtitulo">9º Ano — Estudante Exemplo</p>
+  </header>
+
+  <!-- CARDS DE RESUMO -->
+  <section class="cards">
+    <div class="card">
+      <h2>Média Geral</h2>
+      <p id="media-geral">—</p>
+    </div>
+
+    <div class="card">
+      <h2>Total de Faltas</h2>
+      <p id="total-faltas">—</p>
+    </div>
+
+    <div class="card">
+      <h2>Bom Desempenho</h2>
+      <p id="total-bom">—</p>
+    </div>
+
+    <div class="card">
+      <h2>Precisam de Atenção</h2>
+      <p id="total-atencao">—</p>
+    </div>
+
+    <div class="card">
+      <h2>Frequência</h2>
+      <p id="frequencia">—</p>
+      <small id="frequencia-texto"></small>
+    </div>
+  </section>
+
+  <!-- TABELA DE DISCIPLINAS -->
+  <section class="tabela-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Disciplina</th>
+          <th>1º Tri</th>
+          <th>2º Tri</th>
+          <th>3º Tri</th>
+          <th>Média</th>
+          <th>Faltas</th>
+          <th>Situação</th>
+        </tr>
+      </thead>
+      <!-- O JavaScript vai preencher o corpo da tabela -->
+      <tbody id="corpo-tabela"></tbody>
+    </table>
+  </section>
+
+  <!-- Liga o arquivo de JavaScript -->
+  <script src="script.js"></script>
+</body>
+</html>
