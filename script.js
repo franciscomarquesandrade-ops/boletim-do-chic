@@ -1,13 +1,22 @@
 /* =========================================================
    BOLETIM DIGITAL — 9º ANO
-   Dados fictícios para demonstração.
    ========================================================= */
 
-/* ===== DADOS BRUTOS ===== */
-// Array de objetos: cada objeto é uma disciplina.
-// As notas podem vir como número (78), string com vírgula ("8,2") ou null.
-// As faltas vêm como array de 3 valores (um por trimestre).
-const disciplinas = [
+// CONFIGURAÇÃO FIXA DO ALUNO
+const CONFIG_ALUNO = {
+  turma: "9A",
+  numeroChamada: 12,
+  apiUrl: "https://boletim-api.profbt.com.br"
+};
+
+// PIN MANTIDO SOMENTE EM MEMÓRIA
+let pinSessao = "";
+
+// MODO DE EDIÇÃO
+let modoEdicao = false;
+
+/* ===== DADOS BRUTOS LOCAIS ===== */
+let disciplinas = [
   { disciplina: "Língua Portuguesa", tri1: 78, tri2: "8,2", tri3: 8.6, faltas: [2, 2, 1] },
   { disciplina: "Matemática", tri1: 55, tri2: "5,4", tri3: null, faltas: [3, 2, 2] },
   { disciplina: "Ciências", tri1: 84, tri2: 7.9, tri3: "8,3", faltas: [1, 1, 1] },
@@ -26,43 +35,27 @@ const disciplinas = [
 ];
 
 /* ===== FUNÇÃO: normalizarNota ===== */
-// Converte qualquer formato de nota para a escala 0 a 10.
-// Regras:
-//  - vazio, null ou undefined  -> null (nota ainda não lançada)
-//  - entre 0 e 10              -> mantém
-//  - maior que 10 até 100      -> divide por 10
-//  - aceita ponto ou vírgula
-//  - valor inválido            -> null
 function normalizarNota(valor) {
-  // Nota ausente
   if (valor === null || valor === undefined || valor === "") {
     return null;
   }
-
-  // Se for string, troca vírgula por ponto
   let numero = typeof valor === "string" ? valor.replace(",", ".") : valor;
   numero = Number(numero);
 
-  // Se não for número válido, retorna null
   if (isNaN(numero)) {
     return null;
   }
 
-  // Regras de conversão
   if (numero >= 0 && numero <= 10) {
     return numero;
   }
   if (numero > 10 && numero <= 100) {
     return numero / 10;
   }
-
-  // Fora das regras -> inválido
   return null;
 }
 
 /* ===== FUNÇÃO: calcularMedia ===== */
-// Recebe um array de notas já normalizadas (0–10) e calcula a média.
-// Ignora valores null (notas ausentes). Se não houver nenhuma nota, retorna null.
 function calcularMedia(notas) {
   const validas = notas.filter((n) => n !== null);
   if (validas.length === 0) {
@@ -73,7 +66,6 @@ function calcularMedia(notas) {
 }
 
 /* ===== FUNÇÃO: definirSituacao ===== */
-// Retorna a situação com base na média (referência: 6,0).
 function definirSituacao(media) {
   if (media === null) {
     return "Nota ainda não disponível";
@@ -85,73 +77,142 @@ function definirSituacao(media) {
 }
 
 /* ===== FUNÇÃO: somarFaltas ===== */
-// Soma os valores de um array de faltas.
 function somarFaltas(faltas) {
-  return faltas.reduce((acc, n) => acc + n, 0);
+  if (!Array.isArray(faltas)) return 0;
+  return faltas.reduce((acc, n) => acc + (Number(n) || 0), 0);
 }
 
 /* ===== FUNÇÃO: formatarNota ===== */
-// Mostra a nota com 1 casa decimal, usando vírgula.
-// Se for null, mostra "—".
 function formatarNota(nota) {
-  if (nota === null) {
+  if (nota === null || nota === undefined) {
     return "—";
   }
-  return nota.toFixed(1).replace(".", ",");
+  return Number(nota).toFixed(1).replace(".", ",");
 }
 
 /* ===== FUNÇÃO: classeSituacao ===== */
-// Retorna a classe CSS correspondente à situação.
 function classeSituacao(situacao) {
   if (situacao === "Bom desempenho") return "situacao-bom";
   if (situacao === "Atenção") return "situacao-atencao";
   return "situacao-sem-nota";
 }
 
-/* ===== FUNÇÃO: criarLinha ===== */
-// Cria uma linha (<tr>) da tabela para uma disciplina.
-function criarLinha(item) {
-  // Normaliza as três notas
+/* ===== FUNÇÕES DE VALIDAÇÃO DE EDIÇÃO ===== */
+function validarNotaEdicao(valor) {
+  if (valor === null || valor === undefined || valor.trim() === "") {
+    return { valido: true, valor: null };
+  }
+  const str = valor.replace(",", ".");
+  const num = Number(str);
+  if (isNaN(num) || num < 0 || num > 10) {
+    return { valido: false, valor: null };
+  }
+  return { valido: true, valor: num };
+}
+
+function validarFaltaEdicao(valor) {
+  if (valor === null || valor === undefined || valor.trim() === "") {
+    return { valido: false, valor: null };
+  }
+  const num = Number(valor);
+  if (!Number.isInteger(num) || num < 0) {
+    return { valido: false, valor: null };
+  }
+  return { valido: true, valor: num };
+}
+
+/* ===== RENDERIZAÇÃO DA TABELA ===== */
+function criarLinhaVisualizacao(item) {
   const n1 = normalizarNota(item.tri1);
   const n2 = normalizarNota(item.tri2);
   const n3 = normalizarNota(item.tri3);
 
-  // Calcula média (ignorando ausentes) e soma das faltas
   const media = calcularMedia([n1, n2, n3]);
-  const faltas = somarFaltas(item.faltas);
+  const faltasTotal = somarFaltas(item.faltas);
   const situacao = definirSituacao(media);
 
-  // Cria o elemento <tr>
   const tr = document.createElement("tr");
 
-  tr.innerHTML = `
-    <td>${item.disciplina}</td>
-    <td class="${n1 === null ? "nota-ausente" : ""}">${n1 === null ? "Ainda não lançada" : formatarNota(n1)}</td>
-    <td class="${n2 === null ? "nota-ausente" : ""}">${n2 === null ? "Ainda não lançada" : formatarNota(n2)}</td>
-    <td class="${n3 === null ? "nota-ausente" : ""}">${n3 === null ? "Ainda não lançada" : formatarNota(n3)}</td>
-    <td>${media === null ? "—" : formatarNota(media)}</td>
-    <td>${faltas}</td>
-    <td class="${classeSituacao(situacao)}">${situacao}</td>
+  const tdDisc = document.createElement("td");
+  tdDisc.textContent = item.disciplina || "";
+  tr.appendChild(tdDisc);
+
+  const tdT1 = document.createElement("td");
+  tdT1.className = n1 === null ? "nota-ausente" : "";
+  tdT1.textContent = n1 === null ? "Ainda não lançada" : formatarNota(n1);
+  tr.appendChild(tdT1);
+
+  const tdT2 = document.createElement("td");
+  tdT2.className = n2 === null ? "nota-ausente" : "";
+  tdT2.textContent = n2 === null ? "Ainda não lançada" : formatarNota(n2);
+  tr.appendChild(tdT2);
+
+  const tdT3 = document.createElement("td");
+  tdT3.className = n3 === null ? "nota-ausente" : "";
+  tdT3.textContent = n3 === null ? "Ainda não lançada" : formatarNota(n3);
+  tr.appendChild(tdT3);
+
+  const tdMed = document.createElement("td");
+  tdMed.textContent = media === null ? "—" : formatarNota(media);
+  tr.appendChild(tdMed);
+
+  const tdFaltas = document.createElement("td");
+  tdFaltas.textContent = faltasTotal;
+  tr.appendChild(tdFaltas);
+
+  const tdSit = document.createElement("td");
+  tdSit.className = classeSituacao(situacao);
+  tdSit.textContent = situacao;
+  tr.appendChild(tdSit);
+
+  return tr;
+}
+
+function criarLinhaEdicao(item, index) {
+  const tr = document.createElement("tr");
+
+  const tdDisc = document.createElement("td");
+  tdDisc.textContent = item.disciplina || "";
+  tr.appendChild(tdDisc);
+
+  const valT1 = item.tri1 === null || item.tri1 === undefined ? "" : item.tri1;
+  const valT2 = item.tri2 === null || item.tri2 === undefined ? "" : item.tri2;
+  const valT3 = item.tri3 === null || item.tri3 === undefined ? "" : item.tri3;
+
+  const f = Array.isArray(item.faltas) ? item.faltas : [0, 0, 0];
+
+  tr.innerHTML += `
+    <td><input type="text" class="input-edicao input-n1" data-index="${index}" value="${valT1}"></td>
+    <td><input type="text" class="input-edicao input-n2" data-index="${index}" value="${valT2}"></td>
+    <td><input type="text" class="input-edicao input-n3" data-index="${index}" value="${valT3}"></td>
+    <td>—</td>
+    <td>
+      <div class="grupo-faltas-edicao">
+        <input type="text" class="input-edicao input-f1" data-index="${index}" value="${f[0] !== undefined ? f[0] : 0}">
+        <input type="text" class="input-edicao input-f2" data-index="${index}" value="${f[1] !== undefined ? f[1] : 0}">
+        <input type="text" class="input-edicao input-f3" data-index="${index}" value="${f[2] !== undefined ? f[2] : 0}">
+      </div>
+    </td>
+    <td>Em edição</td>
   `;
 
   return tr;
 }
 
-/* ===== FUNÇÃO: preencherTabela ===== */
-// Percorre o array de disciplinas e adiciona uma linha por disciplina.
 function preencherTabela() {
   const corpo = document.getElementById("corpo-tabela");
-  corpo.innerHTML = ""; // limpa antes de preencher
+  corpo.innerHTML = "";
 
-  disciplinas.forEach((item) => {
-    corpo.appendChild(criarLinha(item));
+  disciplinas.forEach((item, index) => {
+    if (modoEdicao) {
+      corpo.appendChild(criarLinhaEdicao(item, index));
+    } else {
+      corpo.appendChild(criarLinhaVisualizacao(item));
+    }
   });
 }
 
-/* ===== FUNÇÃO: preencherCards ===== */
-// Calcula e exibe os valores dos cards de resumo.
 function preencherCards() {
-  // Arrays auxiliares
   const medias = [];
   let totalFaltas = 0;
   let totalBom = 0;
@@ -172,31 +233,213 @@ function preencherCards() {
     totalFaltas += somarFaltas(item.faltas);
   });
 
-  // Média geral (só entre disciplinas com alguma nota válida)
   const mediaGeral = medias.length
     ? medias.reduce((a, b) => a + b, 0) / medias.length
     : null;
 
-  // Preenche os cards
   document.getElementById("media-geral").textContent =
     mediaGeral === null ? "—" : formatarNota(mediaGeral);
-
   document.getElementById("total-faltas").textContent = totalFaltas;
-
   document.getElementById("total-bom").textContent = totalBom;
-
   document.getElementById("total-atencao").textContent = totalAtencao;
 
-  // Frequência FICTÍCIA / DEMONSTRATIVA
-  // Este valor NÃO é calculado a partir das faltas.
-  // No futuro, a frequência será tratada de outra forma (dados reais da escola).
   document.getElementById("frequencia").textContent = "92%";
   document.getElementById("frequencia-texto").textContent = "Frequência adequada";
 }
 
-/* ===== INICIALIZAÇÃO ===== */
-// Quando a página terminar de carregar, preenche tudo.
+/* ===== REQUISIÇÕES DA API ===== */
+
+async function fazerLogin() {
+  const inputPin = document.getElementById("input-pin");
+  const msgLogin = document.getElementById("msg-login");
+  const pinDigitado = inputPin.value.trim();
+
+  if (!pinDigitado) {
+    msgLogin.textContent = "Digite o PIN.";
+    msgLogin.style.color = "#e53935";
+    return;
+  }
+
+  msgLogin.textContent = "Conectando...";
+  msgLogin.style.color = "#b0b0b0";
+
+  try {
+    const resposta = await fetch(`${CONFIG_ALUNO.apiUrl}/api/v1/boletins/abrir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        turma: CONFIG_ALUNO.turma,
+        numero_chamada: CONFIG_ALUNO.numeroChamada,
+        pin: pinDigitado
+      })
+    });
+
+    if (resposta.status === 401) {
+      msgLogin.textContent = "Turma, chamada ou PIN inválidos.";
+      msgLogin.style.color = "#e53935";
+      return;
+    }
+
+    if (resposta.status === 429) {
+      msgLogin.textContent = "Muitas tentativas. Aguarde um minuto e tente novamente.";
+      msgLogin.style.color = "#e53935";
+      return;
+    }
+
+    if (!resposta.ok) {
+      msgLogin.textContent = "Não foi possível conectar ao servidor. Tente novamente.";
+      msgLogin.style.color = "#e53935";
+      return;
+    }
+
+    const json = await resposta.json();
+
+    // SUCESSO: armazena PIN apenas na memória
+    pinSessao = pinDigitado;
+    inputPin.value = ""; // limpa o campo por segurança
+
+    // Trata dados retornados
+    if (json.dados && Array.isArray(json.dados.disciplinas) && json.dados.disciplinas.length > 0) {
+      disciplinas = json.dados.disciplinas;
+    }
+
+    // Esconde login e exibe boletim
+    document.getElementById("area-login").style.display = "none";
+    document.getElementById("conteudo-boletim").style.display = "block";
+
+    preencherTabela();
+    preencherCards();
+
+  } catch (erro) {
+    msgLogin.textContent = "Não foi possível conectar ao servidor. Tente novamente.";
+    msgLogin.style.color = "#e53935";
+  }
+}
+
+async function salvarAlteracoes() {
+  const msgBoletim = document.getElementById("msg-boletim");
+  const linhas = document.querySelectorAll("#corpo-tabela tr");
+  let houverErro = false;
+
+  const novasDisciplinas = [];
+
+  // Remove marcações de erro anteriores
+  document.querySelectorAll(".input-edicao").forEach(el => el.classList.remove("invalido"));
+
+  linhas.forEach((tr, index) => {
+    const inN1 = tr.querySelector(".input-n1");
+    const inN2 = tr.querySelector(".input-n2");
+    const inN3 = tr.querySelector(".input-n3");
+    const inF1 = tr.querySelector(".input-f1");
+    const inF2 = tr.querySelector(".input-f2");
+    const inF3 = tr.querySelector(".input-f3");
+
+    const resN1 = validarNotaEdicao(inN1.value);
+    const resN2 = validarNotaEdicao(inN2.value);
+    const resN3 = validarNotaEdicao(inN3.value);
+
+    const resF1 = validarFaltaEdicao(inF1.value);
+    const resF2 = validarFaltaEdicao(inF2.value);
+    const resF3 = validarFaltaEdicao(inF3.value);
+
+    if (!resN1.valido) { inN1.classList.add("invalido"); houverErro = true; }
+    if (!resN2.valido) { inN2.classList.add("invalido"); houverErro = true; }
+    if (!resN3.valido) { inN3.classList.add("invalido"); houverErro = true; }
+
+    if (!resF1.valido) { inF1.classList.add("invalido"); houverErro = true; }
+    if (!resF2.valido) { inF2.classList.add("invalido"); houverErro = true; }
+    if (!resF3.valido) { inF3.classList.add("invalido"); houverErro = true; }
+
+    if (!houverErro) {
+      novasDisciplinas.push({
+        disciplina: disciplinas[index].disciplina,
+        tri1: resN1.valor,
+        tri2: resN2.valor,
+        tri3: resN3.valor,
+        faltas: [resF1.valor, resF2.valor, resF3.valor]
+      });
+    }
+  });
+
+  if (houverErro) {
+    msgBoletim.textContent = "Corrija os campos destacados em vermelho antes de salvar.";
+    msgBoletim.style.color = "#e53935";
+    return;
+  }
+
+  msgBoletim.textContent = "Salvando...";
+  msgBoletim.style.color = "#b0b0b0";
+
+  try {
+    const resposta = await fetch(`${CONFIG_ALUNO.apiUrl}/api/v1/boletins/salvar`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        turma: CONFIG_ALUNO.turma,
+        numero_chamada: CONFIG_ALUNO.numeroChamada,
+        pin: pinSessao,
+        dados: {
+          disciplinas: novasDisciplinas
+        }
+      })
+    });
+
+    if (!resposta.ok) {
+      msgBoletim.textContent = "Erro ao salvar alterações. Tente novamente.";
+      msgBoletim.style.color = "#e53935";
+      return;
+    }
+
+    disciplinas = novasDisciplinas;
+    modoEdicao = false;
+
+    document.getElementById("btn-alterar").style.display = "inline-block";
+    document.getElementById("btn-salvar").style.display = "none";
+    document.getElementById("btn-cancelar").style.display = "none";
+
+    msgBoletim.textContent = "Dados salvos com sucesso.";
+    msgBoletim.style.color = "#4caf50";
+
+    preencherTabela();
+    preencherCards();
+
+  } catch (erro) {
+    msgBoletim.textContent = "Não foi possível conectar ao servidor. Tente novamente.";
+    msgBoletim.style.color = "#e53935";
+  }
+}
+
+/* ===== CONFIGURAÇÃO DE EVENTOS ===== */
 window.addEventListener("DOMContentLoaded", () => {
-  preencherTabela();
-  preencherCards();
+  const btnEntrar = document.getElementById("btn-entrar");
+  const inputPin = document.getElementById("input-pin");
+  const btnAlterar = document.getElementById("btn-alterar");
+  const btnSalvar = document.getElementById("btn-salvar");
+  const btnCancelar = document.getElementById("btn-cancelar");
+
+  btnEntrar.addEventListener("click", fazerLogin);
+
+  inputPin.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") fazerLogin();
+  });
+
+  btnAlterar.addEventListener("click", () => {
+    modoEdicao = true;
+    btnAlterar.style.display = "none";
+    btnSalvar.style.display = "inline-block";
+    btnCancelar.style.display = "inline-block";
+    document.getElementById("msg-boletim").textContent = "";
+    preencherTabela();
+  });
+
+  btnCancelar.addEventListener("click", () => {
+    modoEdicao = false;
+    btnAlterar.style.display = "inline-block";
+    btnSalvar.style.display = "none";
+    btnCancelar.style.display = "none";
+    document.getElementById("msg-boletim").textContent = "";
+    preencherTabela();
+  });
+
+  btnSalvar.addEventListener("click", salvarAlteracoes);
 });
