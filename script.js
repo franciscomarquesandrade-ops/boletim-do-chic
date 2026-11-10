@@ -15,6 +15,11 @@ let pinSessao = "";
 // MODO DE EDIÇÃO
 let modoEdicao = false;
 
+// INSTÂNCIAS DOS GRÁFICOS
+let graficoMedias = null;
+let graficoEvolucao = null;
+let graficoFaltas = null;
+
 /* ===== DADOS BRUTOS LOCAIS ===== */
 let disciplinas = [
   { disciplina: "Língua Portuguesa", tri1: 78, tri2: "8,2", tri3: 8.6, faltas: [2, 2, 1] },
@@ -340,4 +345,369 @@ async function fazerLogin() {
       return;
     }
 
-    const
+    const json = await resposta.json();
+
+    // SUCESSO: armazena PIN apenas na memória
+    pinSessao = pinDigitado;
+    inputPin.value = ""; // limpa o campo por segurança
+
+    // Trata dados retornados
+    if (json.dados && Array.isArray(json.dados.disciplinas) && json.dados.disciplinas.length > 0) {
+      disciplinas = json.dados.disciplinas;
+    }
+
+    // Esconde login e exibe boletim
+    document.getElementById("area-login").style.display = "none";
+    document.getElementById("conteudo-boletim").style.display = "block";
+
+    preencherTabela();
+    preencherCards();
+    atualizarGraficos();
+
+  } catch (erro) {
+    msgLogin.textContent = "Não foi possível conectar ao servidor. Tente novamente.";
+    msgLogin.style.color = "#e53935";
+  }
+}
+
+async function salvarAlteracoes() {
+  const msgBoletim = document.getElementById("msg-boletim");
+  const linhas = document.querySelectorAll("#corpo-tabela tr");
+  let houverErro = false;
+
+  const novasDisciplinas = [];
+
+  // Remove marcações de erro anteriores
+  document.querySelectorAll(".input-edicao").forEach(el => el.classList.remove("invalido"));
+
+  linhas.forEach((tr, index) => {
+    const inN1 = tr.querySelector(".input-n1");
+    const inN2 = tr.querySelector(".input-n2");
+    const inN3 = tr.querySelector(".input-n3");
+    const inF1 = tr.querySelector(".input-f1");
+    const inF2 = tr.querySelector(".input-f2");
+    const inF3 = tr.querySelector(".input-f3");
+
+    const resN1 = validarNotaEdicao(inN1.value);
+    const resN2 = validarNotaEdicao(inN2.value);
+    const resN3 = validarNotaEdicao(inN3.value);
+
+    const resF1 = validarFaltaEdicao(inF1.value);
+    const resF2 = validarFaltaEdicao(inF2.value);
+    const resF3 = validarFaltaEdicao(inF3.value);
+
+    if (!resN1.valido) { inN1.classList.add("invalido"); houverErro = true; }
+    if (!resN2.valido) { inN2.classList.add("invalido"); houverErro = true; }
+    if (!resN3.valido) { inN3.classList.add("invalido"); houverErro = true; }
+
+    if (!resF1.valido) { inF1.classList.add("invalido"); houverErro = true; }
+    if (!resF2.valido) { inF2.classList.add("invalido"); houverErro = true; }
+    if (!resF3.valido) { inF3.classList.add("invalido"); houverErro = true; }
+
+    if (!houverErro) {
+      novasDisciplinas.push({
+        disciplina: disciplinas[index].disciplina,
+        tri1: resN1.valor,
+        tri2: resN2.valor,
+        tri3: resN3.valor,
+        faltas: [resF1.valor, resF2.valor, resF3.valor]
+      });
+    }
+  });
+
+  if (houverErro) {
+    msgBoletim.textContent = "Corrija os campos destacados em vermelho antes de salvar.";
+    msgBoletim.style.color = "#e53935";
+    return;
+  }
+
+  msgBoletim.textContent = "Salvando...";
+  msgBoletim.style.color = "#b0b0b0";
+
+  try {
+    const resposta = await fetch(`${CONFIG_ALUNO.apiUrl}/api/v1/boletins/salvar`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        turma: CONFIG_ALUNO.turma,
+        numero_chamada: CONFIG_ALUNO.numeroChamada,
+        pin: pinSessao,
+        dados: {
+          disciplinas: novasDisciplinas
+        }
+      })
+    });
+
+    if (!resposta.ok) {
+      msgBoletim.textContent = "Erro ao salvar alterações. Tente novamente.";
+      msgBoletim.style.color = "#e53935";
+      return;
+    }
+
+    disciplinas = novasDisciplinas;
+    modoEdicao = false;
+
+    document.getElementById("btn-alterar").style.display = "inline-block";
+    document.getElementById("btn-salvar").style.display = "none";
+    document.getElementById("btn-cancelar").style.display = "none";
+
+    msgBoletim.textContent = "Dados salvos com sucesso.";
+    msgBoletim.style.color = "#4caf50";
+
+    preencherTabela();
+    preencherCards();
+    atualizarGraficos();
+
+  } catch (erro) {
+    msgBoletim.textContent = "Não foi possível conectar ao servidor. Tente novamente.";
+    msgBoletim.style.color = "#e53935";
+  }
+}
+
+/* ===== FUNÇÕES DOS GRÁFICOS ===== */
+
+function atualizarGraficoMedias() {
+  const ctx = document.getElementById("graficoMediasDisciplinas");
+  if (!ctx) return;
+
+  if (graficoMedias) {
+    graficoMedias.destroy();
+  }
+
+  const rotulos = disciplinas.map(d => d.disciplina);
+  const valores = disciplinas.map(d => {
+    const n1 = normalizarNota(d.tri1);
+    const n2 = normalizarNota(d.tri2);
+    const n3 = normalizarNota(d.tri3);
+    return calcularMedia([n1, n2, n3]);
+  });
+
+  graficoMedias = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: rotulos,
+      datasets: [{
+        label: "Média",
+        data: valores,
+        backgroundColor: "#e53935",
+        borderColor: "#e53935",
+        borderWidth: 1
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          min: 0,
+          max: 10,
+          ticks: { color: "#b0b0b0" },
+          grid: { color: "#333" }
+        },
+        y: {
+          ticks: { color: "#e0e0e0", font: { size: 11 } },
+          grid: { display: false }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const val = context.raw;
+              if (val === null || val === undefined) return " Média: —";
+              return ` Média: ${val.toFixed(1).replace(".", ",")}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function atualizarGraficoEvolucao() {
+  const ctx = document.getElementById("graficoEvolucaoTrimestres");
+  if (!ctx) return;
+
+  if (graficoEvolucao) {
+    graficoEvolucao.destroy();
+  }
+
+  const notasT1 = [];
+  const notasT2 = [];
+  const notasT3 = [];
+
+  disciplinas.forEach(d => {
+    const n1 = normalizarNota(d.tri1);
+    const n2 = normalizarNota(d.tri2);
+    const n3 = normalizarNota(d.tri3);
+
+    if (n1 !== null) notasT1.push(n1);
+    if (n2 !== null) notasT2.push(n2);
+    if (n3 !== null) notasT3.push(n3);
+  });
+
+  const m1 = notasT1.length ? notasT1.reduce((a, b) => a + b, 0) / notasT1.length : null;
+  const m2 = notasT2.length ? notasT2.reduce((a, b) => a + b, 0) / notasT2.length : null;
+  const m3 = notasT3.length ? notasT3.reduce((a, b) => a + b, 0) / notasT3.length : null;
+
+  graficoEvolucao = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: ["1º Tri", "2º Tri", "3º Tri"],
+      datasets: [{
+        label: "Média Geral",
+        data: [m1, m2, m3],
+        borderColor: "#e53935",
+        backgroundColor: "rgba(229, 57, 53, 0.2)",
+        fill: true,
+        tension: 0.2,
+        pointRadius: 5,
+        pointBackgroundColor: "#e53935"
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          min: 0,
+          max: 10,
+          ticks: { color: "#b0b0b0" },
+          grid: { color: "#333" }
+        },
+        x: {
+          ticks: { color: "#e0e0e0" },
+          grid: { color: "#333" }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const val = context.raw;
+              if (val === null || val === undefined) return " Média: —";
+              return ` Média: ${val.toFixed(1).replace(".", ",")}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function atualizarGraficoFaltas() {
+  const ctx = document.getElementById("graficoFaltasTrimestres");
+  if (!ctx) return;
+
+  if (graficoFaltas) {
+    graficoFaltas.destroy();
+  }
+
+  let f1 = 0;
+  let f2 = 0;
+  let f3 = 0;
+
+  disciplinas.forEach(d => {
+    if (Array.isArray(d.faltas)) {
+      f1 += Number(d.faltas[0]) || 0;
+      f2 += Number(d.faltas[1]) || 0;
+      f3 += Number(d.faltas[2]) || 0;
+    }
+  });
+
+  const totalFaltasAcumulado = f1 + f2 + f3;
+  const cardFaltas = document.getElementById("card-faltas");
+  const badgePerigo = document.getElementById("badge-perigo");
+
+  // Avaliação de risco interna (referência de 350 faltas)
+  if (totalFaltasAcumulado >= 350) {
+    if (cardFaltas) cardFaltas.classList.add("card-perigo");
+    if (badgePerigo) badgePerigo.style.display = "inline-block";
+  } else {
+    if (cardFaltas) cardFaltas.classList.remove("card-perigo");
+    if (badgePerigo) badgePerigo.style.display = "none";
+  }
+
+  graficoFaltas = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["1º Tri", "2º Tri", "3º Tri"],
+      datasets: [{
+        label: "Faltas",
+        data: [f1, f2, f3],
+        backgroundColor: "#e53935",
+        borderColor: "#e53935",
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#b0b0b0", precision: 0 },
+          grid: { color: "#333" }
+        },
+        x: {
+          ticks: { color: "#e0e0e0" },
+          grid: { color: "#333" }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return ` ${context.raw} faltas`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function atualizarGraficos() {
+  atualizarGraficoMedias();
+  atualizarGraficoEvolucao();
+  atualizarGraficoFaltas();
+}
+
+/* ===== CONFIGURAÇÃO DE EVENTOS ===== */
+window.addEventListener("DOMContentLoaded", () => {
+  const btnEntrar = document.getElementById("btn-entrar");
+  const inputPin = document.getElementById("input-pin");
+  const btnAlterar = document.getElementById("btn-alterar");
+  const btnSalvar = document.getElementById("btn-salvar");
+  const btnCancelar = document.getElementById("btn-cancelar");
+
+  btnEntrar.addEventListener("click", fazerLogin);
+
+  inputPin.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") fazerLogin();
+  });
+
+  btnAlterar.addEventListener("click", () => {
+    modoEdicao = true;
+    btnAlterar.style.display = "none";
+    btnSalvar.style.display = "inline-block";
+    btnCancelar.style.display = "inline-block";
+    document.getElementById("msg-boletim").textContent = "";
+    preencherTabela();
+  });
+
+  btnCancelar.addEventListener("click", () => {
+    modoEdicao = false;
+    btnAlterar.style.display = "inline-block";
+    btnSalvar.style.display = "none";
+    btnCancelar.style.display = "none";
+    document.getElementById("msg-boletim").textContent = "";
+    preencherTabela();
+  });
+
+  btnSalvar.addEventListener("click", salvarAlteracoes);
+});

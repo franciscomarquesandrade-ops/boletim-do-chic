@@ -18,7 +18,7 @@
 
   <!-- ÁREA DE ACESSO / PIN -->
   <section id="area-login" class="card-acesso">
-    <h2>Acesso ao Boletim</h2>
+    2. Acesso ao Boletim
     <div class="info-aluno-fixa">
       <span><strong>Turma:</strong> 9C</span>
       <span><strong>Chamada:</strong> 11</span>
@@ -70,6 +70,33 @@
       </div>
     </section>
 
+    <!-- ÁREA DOS GRÁFICOS -->
+    <section class="area-graficos">
+      <article class="grafico-card">
+        <h2>Média por disciplina</h2>
+        <div class="grafico-container">
+          <canvas id="graficoMediasDisciplinas"></canvas>
+        </div>
+      </article>
+
+      <article class="grafico-card">
+        <h2>Evolução da média geral</h2>
+        <div class="grafico-container">
+          <canvas id="graficoEvolucaoTrimestres"></canvas>
+        </div>
+      </article>
+
+      <article class="grafico-card" id="card-faltas">
+        <div class="cabecalho-card-faltas">
+          <h2>Faltas por trimestre</h2>
+          <span id="badge-perigo" class="badge-perigo" style="display: none;">Perigo</span>
+        </div>
+        <div class="grafico-container">
+          <canvas id="graficoFaltasTrimestres"></canvas>
+        </div>
+      </article>
+    </section>
+
     <!-- TABELA DE DISCIPLINAS -->
     <section class="tabela-container">
       <table>
@@ -91,6 +118,8 @@
 
   </main>
 
+  <!-- Biblioteca Chart.js para os gráficos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Liga o arquivo de JavaScript -->
   <script src="script.js"></script>
 </body>
